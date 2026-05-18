@@ -47,6 +47,12 @@ def update_color_in_file(filename):
         data[offset + 9] = brightness
         data[offset + 10] = speed
     
+    # CLEAR PER-KEY COLOR DATA (Offsets 512 to 1088)
+    # The original Windows PCAP had residual pink per-key colors mapped here!
+    # By wiping them to 0, we prevent keys from bleeding pinkish tones.
+    for i in range(512, 1088):
+        data[i] = 0x00
+
     active_mode_bytes = [mode, r, g, b, 0x00, 0x00, 0x00, 0x00, byte_8, brightness, speed, 0x00, 0x00, 0x00, 0xaa, 0x55]
     for i in range(16):
         data[1088 + i] = active_mode_bytes[i]
