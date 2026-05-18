@@ -3,16 +3,19 @@ import sys
 import os
 import subprocess
 
-if len(sys.argv) != 4:
-    print("Usage: ./set_color.py <R> <G> <B>")
+if len(sys.argv) != 7:
+    print("Usage: ./set_color.py <Mode> <R> <G> <B> <Brightness> <Speed>")
     sys.exit(1)
 
-r = int(sys.argv[1], 16)
-g = int(sys.argv[2], 16)
-b = int(sys.argv[3], 16)
+mode = int(sys.argv[1], 16)
+r = int(sys.argv[2], 16)
+g = int(sys.argv[3], 16)
+b = int(sys.argv[4], 16)
+brightness = int(sys.argv[5], 16)
+speed = int(sys.argv[6], 16)
 
 # Some firmwares treat specific pure magenta or pure white combinations as "rainbow cycle"
-# If we want a solid color, slightly offsetting from pure 0xff can bypass the hardcoded rainbow trigger
+# slightly offsetting from pure 0xff bypasses the hardcoded rainbow trigger
 if r == 0xff and g == 0x00 and b == 0xff:
     r = 0xfe
     b = 0xfe
@@ -26,20 +29,29 @@ def update_color_in_file(filename):
     with open(filename, 'rb') as f:
         data = bytearray(f.read())
     
-    # Mode 1 (Static) is at offset 0
-    data[1] = r
-    data[2] = g
-    data[3] = b
+    # Mode configurations start at offset 0, each is 16 bytes.
+    # Update the specific mode's entry in the list
+    mode_index = mode - 1
+    offset = mode_index * 16
+    if 0 <= offset < 1088:
+        data[offset + 1] = r
+        data[offset + 2] = g
+        data[offset + 3] = b
+        data[offset + 9] = brightness
+        data[offset + 10] = speed
 
-    # Overwrite the active mode (Page 18) to expressly be Mode 01 (Static)
-    # Format: [01] [R] [G] [B] [00] [00] [00] [00] [00] [0f] [0a] [00] [00] [00] [aa] [55]
-    active_mode_bytes = [0x01, r, g, b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x0a, 0x00, 0x00, 0x00, 0xaa, 0x55]
+    # Overwrite the active mode (Page 18)
+    # Byte 8 logic: if mode is 1 (Static), we use 0x00 for byte 8 (from your successful green test)
+    # For other modes we can default to 0x01
+    byte_8 = 0x00 if mode == 1 else 0x01
+    
+    active_mode_bytes = [mode, r, g, b, 0x00, 0x00, 0x00, 0x00, byte_8, brightness, speed, 0x00, 0x00, 0x00, 0xaa, 0x55]
     for i in range(16):
         data[1088 + i] = active_mode_bytes[i]
 
     with open(filename, 'wb') as f:
         f.write(data)
-    print(f"Updated {filename} to Static Mode RGB({r:02x}, {g:02x}, {b:02x})")
+    print(f"Updated {filename} to Mode {mode:02x} RGB({r:02x}, {g:02x}, {b:02x}) B:{brightness} S:{speed}")
 
 update_color_in_file('payload_0413_1.bin')
 update_color_in_file('payload_0413_2.bin')
