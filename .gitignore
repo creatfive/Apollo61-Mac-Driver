@@ -1,0 +1,15 @@
+.DS_Store
+
+# Large capture files
+capture.pcapng
+capture.txt
+61Key Keyboard Software V1.1.exe
+
+# Build artifacts
+mac-hid-tools/*.o
+mac-hid-tools/apollo61_probe_bulk
+mac-hid-tools/apollo61_probe_read
+
+# Python generated folders
+__pycache__/
+*.pyc

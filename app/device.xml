@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<device.config>
+ <Language.info>
+  <Language LCID="2052" init="0"/>
+ </Language.info>
+ <Singledevice.info>
+  <device name="" type= "1" vid="05AC" pid="024F" image=".png" image_none=".png"/>
+ </Singledevice.info>
+ <main.button>
+  <user show="1" data="doc/User Guide.pdf"/>
+  <website show="0" data=""/>
+  <store show="0" data=""/>
+ </main.button>
+</device.config>
