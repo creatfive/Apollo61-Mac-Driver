@@ -49,6 +49,7 @@ class ApolloApp:
         self.mode_combo.pack(pady=5)
         self.mode_combo.current(0)
         self.mode_map = {m[0]: m[1] for m in modes}
+        self.mode_combo.bind("<<ComboboxSelected>>", lambda e: self.apply_settings())
         
         # Color Preview Block
         tk.Label(root, text="Current Color:", font=("Helvetica", 14)).pack(pady=(15, 0))
@@ -63,20 +64,24 @@ class ApolloApp:
         self.bright_scale = tk.Scale(root, from_=0, to=15, orient=tk.HORIZONTAL, length=200)
         self.bright_scale.set(15)
         self.bright_scale.pack()
+        self.bright_scale.bind("<ButtonRelease-1>", lambda e: self.apply_settings())
 
         # Speed Slider
         tk.Label(root, text="Animation Speed (0 - 10):", font=("Helvetica", 12)).pack(pady=(10, 0))
         self.speed_scale = tk.Scale(root, from_=0, to=10, orient=tk.HORIZONTAL, length=200)
         self.speed_scale.set(10)
         self.speed_scale.pack()
+        self.speed_scale.bind("<ButtonRelease-1>", lambda e: self.apply_settings())
         
         # Rainbow Mode Checkbox
         self.rainbow_var = tk.IntVar(value=0)
-        tk.Checkbutton(root, text="Enable Rainbow Mode (Overrides Color)", variable=self.rainbow_var, font=("Helvetica", 12)).pack(pady=5)
+        tk.Checkbutton(root, text="Enable Rainbow Mode (Overrides Color)", variable=self.rainbow_var, font=("Helvetica", 12), command=self.apply_settings).pack(pady=5)
         
-        # Apply Button
-        self.apply_btn = tk.Button(root, text="Apply to Keyboard", command=self.apply_settings, font=("Helvetica", 14, "bold"), bg="blue", fg="white")
-        self.apply_btn.pack(pady=20)
+        # Status Label (replaced apply button)
+        self.status_lbl = tk.Label(root, text="Ready", font=("Helvetica", 14, "bold"), fg="green")
+        self.status_lbl.pack(pady=20)
+        
+        self.is_applying = False
         
     def pick_color(self):
         # Open macOS native color picker
@@ -89,10 +94,15 @@ class ApolloApp:
             
             # Disable rainbow mode if they explicitly picked a color
             self.rainbow_var.set(0)
+            self.apply_settings()
             
     def apply_settings(self):
-        # Disable button to prevent spamming
-        self.apply_btn.config(state="disabled", text="Applying...")
+        # Prevent overlapping flashes
+        if self.is_applying:
+            return
+            
+        self.is_applying = True
+        self.status_lbl.config(text="Applying to Keyboard...", fg="blue")
         
         # Get Mode Hex
         selected_mode_str = self.mode_var.get()
@@ -122,8 +132,9 @@ class ApolloApp:
             subprocess.run([script_path] + args)
             print("Done pushing to keyboard!")
             
-            # Re-enable button
-            self.root.after(0, lambda: self.apply_btn.config(state="normal", text="Apply to Keyboard"))
+            # Re-enable UI
+            self.is_applying = False
+            self.root.after(0, lambda: self.status_lbl.config(text="Ready", fg="green"))
             
         threading.Thread(target=push_to_keyboard, daemon=True).start()
 
