@@ -70,6 +70,10 @@ class ApolloApp:
         self.speed_scale.set(10)
         self.speed_scale.pack()
         
+        # Rainbow Mode Checkbox
+        self.rainbow_var = tk.IntVar(value=0)
+        tk.Checkbutton(root, text="Enable Rainbow Mode (Overrides Color)", variable=self.rainbow_var, font=("Helvetica", 12)).pack(pady=5)
+        
         # Apply Button
         self.apply_btn = tk.Button(root, text="Apply to Keyboard", command=self.apply_settings, font=("Helvetica", 14, "bold"), bg="blue", fg="white")
         self.apply_btn.pack(pady=20)
@@ -83,6 +87,9 @@ class ApolloApp:
             hex_color = f"#{self.current_r:02x}{self.current_g:02x}{self.current_b:02x}"
             self.color_preview.config(bg=hex_color)
             
+            # Disable rainbow mode if they explicitly picked a color
+            self.rainbow_var.set(0)
+            
     def apply_settings(self):
         # Disable button to prevent spamming
         self.apply_btn.config(state="disabled", text="Applying...")
@@ -91,9 +98,10 @@ class ApolloApp:
         selected_mode_str = self.mode_var.get()
         mode_id = int(self.mode_map[selected_mode_str])
         
-        # Get Sliders
+        # Get Sliders & Checkbox
         bright = int(self.bright_scale.get())
         speed = int(self.speed_scale.get())
+        is_rainbow = self.rainbow_var.get()
         
         # Format arguments
         args = [
@@ -102,10 +110,11 @@ class ApolloApp:
             f"{self.current_g:02x}",
             f"{self.current_b:02x}",
             f"{bright:02x}",
-            f"{speed:02x}"
+            f"{speed:02x}",
+            f"{is_rainbow}"
         ]
         
-        print(f"Applying Mode {mode_id} | RGB: {self.current_r},{self.current_g},{self.current_b} | Brightness: {bright} | Speed: {speed}")
+        print(f"Applying Mode {mode_id} | RGB: {self.current_r},{self.current_g},{self.current_b} | Brightness: {bright} | Speed: {speed} | Rainbow: {is_rainbow}")
         
         # Run in a background thread so the UI doesn't freeze
         def push_to_keyboard():
