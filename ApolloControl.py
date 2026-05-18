@@ -5,22 +5,65 @@ import subprocess
 import threading
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QHBoxLayout, QLabel, QComboBox, QPushButton, 
-                               QSlider, QCheckBox, QColorDialog, QFrame)
-from PySide6.QtCore import Qt, Signal, QObject
-from PySide6.QtGui import QColor, QFont
+                               QSlider, QCheckBox, QColorDialog, QFrame,
+                               QStackedWidget, QGridLayout, QScrollArea, QSizePolicy)
+from PySide6.QtCore import Qt, Signal, QObject, QSize, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QBrush, QPen, QPainterPath
 
 class WorkerSignals(QObject):
     finished = Signal()
 
+# Custom UI Elements mimicking the KeyCraft Pro React design
+class Card(QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("card")
+        self.setStyleSheet("""
+            QFrame#card {
+                background-color: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 16px;
+            }
+        """)
+
+class SidebarButton(QPushButton):
+    def __init__(self, text, active=False):
+        super().__init__(text)
+        self.setCheckable(True)
+        self.setChecked(active)
+        self.setFixedHeight(48)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: rgba(255, 255, 255, 0.4);
+                text-align: left;
+                padding-left: 20px;
+                border-radius: 12px;
+                font-size: 14px;
+                font-weight: bold;
+                font-family: 'Helvetica Neue';
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+                color: rgba(255, 255, 255, 0.8);
+            }
+            QPushButton:checked {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: #FFFFFF;
+            }
+        """)
+
 class ApolloApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Apollo61 Command Center")
-        self.setFixedSize(450, 680)
+        self.setWindowTitle("KeyCraft Pro")
+        self.resize(1000, 700)
+        self.setMinimumSize(900, 600)
         
         self.current_r = 255
         self.current_g = 0
-        self.current_b = 0
+        self.current_b = 102 # #ff0066 pinkish like the react app
         self.is_applying = False
         
         self.signals = WorkerSignals()
@@ -32,257 +75,299 @@ class ApolloApp(QMainWindow):
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(30, 30, 30, 30)
-        main_layout.setSpacing(20)
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # --- SIDEBAR ---
+        sidebar = QFrame()
+        sidebar.setFixedWidth(240)
+        sidebar.setObjectName("sidebar")
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(20, 30, 20, 20)
+        sidebar_layout.setSpacing(10)
+        
+        # Logo
+        logo_layout = QHBoxLayout()
+        logo_icon = QFrame()
+        logo_icon.setFixedSize(40, 40)
+        logo_icon.setStyleSheet("background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00E5FF, stop:1 #9D00FF); border-radius: 12px;")
+        
+        title = QLabel("KeyCraft<span style='color: #00E5FF;'>Pro</span>")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: white;")
+        
+        logo_layout.addWidget(logo_icon)
+        logo_layout.addWidget(title)
+        logo_layout.addStretch()
+        sidebar_layout.addLayout(logo_layout)
+        sidebar_layout.addSpacing(30)
+        
+        # Navigation
+        self.nav_lighting = SidebarButton("  Lighting", active=True)
+        self.nav_settings = SidebarButton("  Settings")
+        sidebar_layout.addWidget(self.nav_lighting)
+        sidebar_layout.addWidget(self.nav_settings)
+        sidebar_layout.addStretch()
+        
+        # Connection Status
+        conn_card = Card()
+        conn_layout = QVBoxLayout(conn_card)
+        conn_layout.setContentsMargins(15, 15, 15, 15)
+        conn_label = QLabel("● CONNECTED")
+        conn_label.setStyleSheet("color: #00FF66; font-size: 10px; font-weight: bold; letter-spacing: 1px;")
+        device_label = QLabel("Apollo61 Native")
+        device_label.setStyleSheet("color: white; font-size: 13px; font-weight: bold;")
+        conn_layout.addWidget(conn_label)
+        conn_layout.addWidget(device_label)
+        sidebar_layout.addWidget(conn_card)
+        
+        main_layout.addWidget(sidebar)
+        
+        # --- MAIN CONTENT AREA ---
+        content_area = QFrame()
+        content_area.setObjectName("contentArea")
+        content_layout = QVBoxLayout(content_area)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
         
         # Header
-        header_layout = QVBoxLayout()
-        header_layout.setSpacing(5)
-        title = QLabel("APOLLO61")
-        title.setObjectName("titleLabel")
-        title.setAlignment(Qt.AlignCenter)
+        header = QFrame()
+        header.setFixedHeight(70)
+        header.setObjectName("header")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(30, 0, 30, 0)
         
-        subtitle = QLabel("macOS Native Driver")
-        subtitle.setObjectName("subtitleLabel")
-        subtitle.setAlignment(Qt.AlignCenter)
+        view_label = QLabel("ACTIVE VIEW / <span style='color: white;'>LIGHTING</span>")
+        view_label.setStyleSheet("color: rgba(255, 255, 255, 0.4); font-size: 12px; font-weight: bold; letter-spacing: 1px;")
         
-        header_layout.addWidget(title)
-        header_layout.addWidget(subtitle)
-        main_layout.addLayout(header_layout)
+        self.apply_btn = QPushButton("  Apply Changes")
+        self.apply_btn.setObjectName("applyBtn")
+        self.apply_btn.setFixedSize(160, 40)
+        self.apply_btn.setCursor(Qt.PointingHandCursor)
+        self.apply_btn.clicked.connect(self.trigger_sync)
         
-        # Separator
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        line.setObjectName("separator")
-        main_layout.addWidget(line)
+        header_layout.addWidget(view_label)
+        header_layout.addStretch()
+        header_layout.addWidget(self.apply_btn)
         
-        # Mode Selection
-        mode_layout = QVBoxLayout()
-        mode_layout.setSpacing(8)
-        mode_label = QLabel("Lighting Mode")
-        mode_label.setObjectName("sectionLabel")
+        content_layout.addWidget(header)
+        
+        # Scrollable Content
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; } QWidget#scrollContent { background: transparent; }")
+        
+        scroll_content = QWidget()
+        scroll_content.setObjectName("scrollContent")
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(40, 40, 40, 40)
+        scroll_layout.setSpacing(30)
+        
+        # Section Title
+        sec_title = QLabel("Lighting Studio")
+        sec_title.setStyleSheet("font-size: 28px; font-weight: bold; color: white;")
+        sec_sub = QLabel("Customize zones and dynamic effects")
+        sec_sub.setStyleSheet("font-size: 14px; color: rgba(255, 255, 255, 0.4);")
+        scroll_layout.addWidget(sec_title)
+        scroll_layout.addWidget(sec_sub)
+        scroll_layout.addSpacing(10)
+        
+        # Cards Grid
+        grid = QGridLayout()
+        grid.setSpacing(20)
+        
+        # Card 1: Color Picker & Mode
+        left_card = Card()
+        left_layout = QVBoxLayout(left_card)
+        left_layout.setContentsMargins(25, 25, 25, 25)
+        left_layout.setSpacing(20)
+        
+        mode_lbl = QLabel("LIGHTING MODE")
+        mode_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: bold; letter-spacing: 1px;")
         
         self.mode_combo = QComboBox()
+        self.mode_combo.setFixedHeight(40)
         self.modes = [
-            ("Mode 1: Static", 1), ("Mode 2: Single On (Reactive)", 2),
-            ("Mode 3: Single Off", 3), ("Mode 4: Glittering", 4),
-            ("Mode 5: Falling", 5), ("Mode 6: Colourful", 6),
-            ("Mode 7: Breath", 7), ("Mode 8: Spectrum", 8),
-            ("Mode 9: Outward", 9), ("Mode 10: Scrolling", 10),
-            ("Mode 11: Rolling", 11), ("Mode 12: Rotating", 12),
-            ("Mode 13: Explode", 13), ("Mode 14: Launch", 14),
-            ("Mode 15: Ripples", 15), ("Mode 16: Flowing", 16),
-            ("Mode 17: Pulsating", 17), ("Mode 18: Tilt", 18),
-            ("Mode 19: Shuttle", 19),
+            ("Static", 1), ("Reactive", 2), ("Single Off", 3), ("Glittering", 4),
+            ("Falling", 5), ("Colourful", 6), ("Breath", 7), ("Spectrum", 8),
+            ("Outward", 9), ("Scrolling", 10), ("Rolling", 11), ("Rotating", 12),
+            ("Explode", 13), ("Launch", 14), ("Ripples", 15), ("Flowing", 16),
+            ("Pulsating", 17), ("Tilt", 18), ("Shuttle", 19)
         ]
         for name, _ in self.modes:
             self.mode_combo.addItem(name)
-        self.mode_combo.currentIndexChanged.connect(self.trigger_sync)
+            
+        color_lbl = QLabel("GLOBAL COLOR")
+        color_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: bold; letter-spacing: 1px;")
         
-        mode_layout.addWidget(mode_label)
-        mode_layout.addWidget(self.mode_combo)
-        main_layout.addLayout(mode_layout)
-        
-        # Color Selection
-        color_layout = QHBoxLayout()
-        color_label = QLabel("Global Color")
-        color_label.setObjectName("sectionLabel")
-        
+        color_row = QHBoxLayout()
         self.color_preview = QFrame()
-        self.color_preview.setFixedSize(50, 30)
-        self.color_preview.setStyleSheet("background-color: #ff0000; border-radius: 4px;")
+        self.color_preview.setFixedSize(60, 40)
+        self.color_preview.setStyleSheet(f"background-color: #ff0066; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);")
         
-        self.color_btn = QPushButton("Choose Color")
-        self.color_btn.clicked.connect(self.pick_color)
+        self.pick_btn = QPushButton("Choose Color")
+        self.pick_btn.setFixedHeight(40)
+        self.pick_btn.setCursor(Qt.PointingHandCursor)
+        self.pick_btn.clicked.connect(self.pick_color)
         
-        color_layout.addWidget(color_label)
-        color_layout.addStretch()
-        color_layout.addWidget(self.color_preview)
-        color_layout.addWidget(self.color_btn)
-        main_layout.addLayout(color_layout)
+        color_row.addWidget(self.color_preview)
+        color_row.addWidget(self.pick_btn)
         
-        # Sliders
-        slider_layout = QVBoxLayout()
-        slider_layout.setSpacing(15)
+        left_layout.addWidget(mode_lbl)
+        left_layout.addWidget(self.mode_combo)
+        left_layout.addSpacing(10)
+        left_layout.addWidget(color_lbl)
+        left_layout.addLayout(color_row)
+        left_layout.addStretch()
         
-        # Brightness
-        bright_box = QVBoxLayout()
-        bright_box.setSpacing(5)
-        self.bright_label = QLabel("Brightness: 100%")
-        self.bright_label.setObjectName("sectionLabel")
+        # Card 2: Sliders
+        right_card = Card()
+        right_layout = QVBoxLayout(right_card)
+        right_layout.setContentsMargins(25, 25, 25, 25)
+        right_layout.setSpacing(20)
+        
+        self.bright_lbl = QLabel("BRIGHTNESS: 100%")
+        self.bright_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: bold; letter-spacing: 1px;")
         self.bright_slider = QSlider(Qt.Horizontal)
         self.bright_slider.setRange(0, 15)
         self.bright_slider.setValue(15)
         self.bright_slider.valueChanged.connect(self.update_bright_label)
-        self.bright_slider.sliderReleased.connect(self.trigger_sync)
-        bright_box.addWidget(self.bright_label)
-        bright_box.addWidget(self.bright_slider)
         
-        # Speed
-        speed_box = QVBoxLayout()
-        speed_box.setSpacing(5)
-        self.speed_label = QLabel("Animation Speed: 100%")
-        self.speed_label.setObjectName("sectionLabel")
+        self.speed_lbl = QLabel("ANIMATION SPEED: 100%")
+        self.speed_lbl.setStyleSheet("color: rgba(255, 255, 255, 0.6); font-size: 11px; font-weight: bold; letter-spacing: 1px;")
         self.speed_slider = QSlider(Qt.Horizontal)
         self.speed_slider.setRange(0, 10)
         self.speed_slider.setValue(10)
         self.speed_slider.valueChanged.connect(self.update_speed_label)
-        self.speed_slider.sliderReleased.connect(self.trigger_sync)
-        speed_box.addWidget(self.speed_label)
-        speed_box.addWidget(self.speed_slider)
         
-        slider_layout.addLayout(bright_box)
-        slider_layout.addLayout(speed_box)
-        main_layout.addLayout(slider_layout)
+        self.rainbow_check = QCheckBox("Force Rainbow Cycle")
+        self.rainbow_check.setStyleSheet("""
+            QCheckBox { color: white; font-size: 13px; font-weight: bold; }
+            QCheckBox::indicator { width: 20px; height: 20px; border-radius: 6px; background-color: rgba(255,255,255,0.1); }
+            QCheckBox::indicator:checked { background-color: #00E5FF; }
+        """)
         
-        # Rainbow Checkbox
-        self.rainbow_check = QCheckBox("Force Rainbow Cycle (Overrides Color)")
-        self.rainbow_check.stateChanged.connect(self.trigger_sync)
-        main_layout.addWidget(self.rainbow_check)
+        right_layout.addWidget(self.bright_lbl)
+        right_layout.addWidget(self.bright_slider)
+        right_layout.addSpacing(10)
+        right_layout.addWidget(self.speed_lbl)
+        right_layout.addWidget(self.speed_slider)
+        right_layout.addSpacing(20)
+        right_layout.addWidget(self.rainbow_check)
+        right_layout.addStretch()
         
-        main_layout.addStretch()
+        grid.addWidget(left_card, 0, 0)
+        grid.addWidget(right_card, 0, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
         
-        # Status Bar
-        self.status_lbl = QLabel("● Keyboard Ready")
-        self.status_lbl.setObjectName("statusReady")
-        self.status_lbl.setAlignment(Qt.AlignCenter)
-        main_layout.addWidget(self.status_lbl)
+        scroll_layout.addLayout(grid)
+        
+        # Preview Card
+        preview_card = Card()
+        preview_layout = QVBoxLayout(preview_card)
+        preview_layout.setContentsMargins(40, 60, 40, 60)
+        prev_title = QLabel("Live Preview Active")
+        prev_title.setAlignment(Qt.AlignCenter)
+        prev_title.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
+        prev_sub = QLabel("Hardware lighting updates dynamically on apply")
+        prev_sub.setAlignment(Qt.AlignCenter)
+        prev_sub.setStyleSheet("color: rgba(255,255,255,0.4); font-size: 13px;")
+        preview_layout.addWidget(prev_title)
+        preview_layout.addWidget(prev_sub)
+        
+        scroll_layout.addWidget(preview_card)
+        scroll_layout.addStretch()
+        
+        scroll.setWidget(scroll_content)
+        content_layout.addWidget(scroll)
+        main_layout.addWidget(content_area)
 
     def apply_theme(self):
-        # Modern Dark Theme QSS
         qss = """
         QMainWindow {
-            background-color: #121212;
+            background-color: #09090B;
         }
-        QLabel {
-            color: #E0E0E0;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-size: 13px;
+        QFrame#sidebar {
+            background-color: rgba(0, 0, 0, 0.4);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
         }
-        QLabel#titleLabel {
-            font-size: 28px;
-            font-weight: bold;
-            color: #00E5FF;
-            letter-spacing: 2px;
-        }
-        QLabel#subtitleLabel {
-            font-size: 12px;
-            color: #888888;
-            margin-bottom: 10px;
-        }
-        QLabel#sectionLabel {
-            font-size: 14px;
-            font-weight: 600;
-            color: #FFFFFF;
-        }
-        QFrame#separator {
-            background-color: #2A2A2A;
-            max-height: 1px;
+        QFrame#header {
+            background-color: rgba(0, 0, 0, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
         QComboBox {
-            background-color: #1E1E1E;
+            background-color: rgba(255, 255, 255, 0.05);
             color: #FFFFFF;
-            border: 1px solid #333333;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-size: 14px;
+            font-weight: bold;
         }
         QComboBox::drop-down {
             border: none;
             width: 30px;
         }
-        QComboBox:hover {
-            border: 1px solid #00E5FF;
-        }
         QComboBox QAbstractItemView {
             background-color: #1E1E1E;
-            color: #FFFFFF;
+            color: white;
             selection-background-color: #00E5FF;
-            selection-color: #000000;
-            border: 1px solid #333333;
+            selection-color: black;
+            border-radius: 8px;
         }
         QPushButton {
-            background-color: #2A2A2A;
+            background-color: rgba(255, 255, 255, 0.05);
             color: #FFFFFF;
-            border: 1px solid #333333;
-            border-radius: 6px;
-            padding: 8px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
             font-size: 13px;
             font-weight: bold;
         }
         QPushButton:hover {
-            background-color: #3A3A3A;
-            border: 1px solid #00E5FF;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
-        QPushButton:pressed {
+        QPushButton#applyBtn {
+            background-color: white;
+            color: black;
+            border: none;
+            border-radius: 8px;
+        }
+        QPushButton#applyBtn:hover {
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+        QPushButton#applyBtn:disabled {
             background-color: #00E5FF;
-            color: #000000;
+            color: black;
         }
         QSlider::groove:horizontal {
             border: none;
             height: 6px;
-            background: #2A2A2A;
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
         }
         QSlider::handle:horizontal {
-            background: #00E5FF;
-            border: 2px solid #121212;
-            width: 16px;
-            height: 16px;
+            background: white;
+            width: 18px;
+            height: 18px;
             margin: -6px 0;
-            border-radius: 8px;
-        }
-        QSlider::handle:horizontal:hover {
-            background: #FFFFFF;
+            border-radius: 9px;
         }
         QSlider::sub-page:horizontal {
             background: #00E5FF;
             border-radius: 3px;
-        }
-        QCheckBox {
-            font-size: 13px;
-            color: #E0E0E0;
-            spacing: 10px;
-        }
-        QCheckBox::indicator {
-            width: 18px;
-            height: 18px;
-            border-radius: 4px;
-            border: 1px solid #444444;
-            background: #1E1E1E;
-        }
-        QCheckBox::indicator:checked {
-            background: #00E5FF;
-            border: 1px solid #00E5FF;
-        }
-        QLabel#statusReady {
-            font-size: 14px;
-            font-weight: bold;
-            color: #00FF66;
-            padding: 10px;
-            background-color: #1A2E1A;
-            border-radius: 8px;
-        }
-        QLabel#statusSyncing {
-            font-size: 14px;
-            font-weight: bold;
-            color: #00E5FF;
-            padding: 10px;
-            background-color: #1A2833;
-            border-radius: 8px;
         }
         """
         self.setStyleSheet(qss)
         
     def update_bright_label(self, value):
         percent = int((value / 15) * 100)
-        self.bright_label.setText(f"Brightness: {percent}%")
+        self.bright_lbl.setText(f"BRIGHTNESS: {percent}%")
         
     def update_speed_label(self, value):
         percent = int((value / 10) * 100)
-        self.speed_label.setText(f"Animation Speed: {percent}%")
+        self.speed_lbl.setText(f"ANIMATION SPEED: {percent}%")
         
     def pick_color(self):
         color = QColorDialog.getColor(QColor(self.current_r, self.current_g, self.current_b), self, "Choose Lighting Color")
@@ -291,22 +376,16 @@ class ApolloApp(QMainWindow):
             self.current_g = color.green()
             self.current_b = color.blue()
             hex_color = color.name()
-            self.color_preview.setStyleSheet(f"background-color: {hex_color}; border-radius: 4px;")
-            
-            self.rainbow_check.blockSignals(True)
+            self.color_preview.setStyleSheet(f"background-color: {hex_color}; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);")
             self.rainbow_check.setChecked(False)
-            self.rainbow_check.blockSignals(False)
-            self.trigger_sync()
 
     def trigger_sync(self):
         if self.is_applying:
             return
             
         self.is_applying = True
-        self.status_lbl.setObjectName("statusSyncing")
-        self.status_lbl.setText("● Syncing to Device...")
-        self.status_lbl.style().unpolish(self.status_lbl)
-        self.status_lbl.style().polish(self.status_lbl)
+        self.apply_btn.setEnabled(False)
+        self.apply_btn.setText("  Syncing...")
         
         mode_idx = self.mode_combo.currentIndex()
         mode_id = self.modes[mode_idx][1]
@@ -328,10 +407,8 @@ class ApolloApp(QMainWindow):
 
     def on_sync_complete(self):
         self.is_applying = False
-        self.status_lbl.setObjectName("statusReady")
-        self.status_lbl.setText("● Sync Complete")
-        self.status_lbl.style().unpolish(self.status_lbl)
-        self.status_lbl.style().polish(self.status_lbl)
+        self.apply_btn.setEnabled(True)
+        self.apply_btn.setText("  Apply Changes")
 
 if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
